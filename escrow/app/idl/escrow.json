@@ -1,0 +1,761 @@
+{
+  "address": "4BnPg8BniGiwC9Pop7b45gDqTV2vGERgUTBSHEDCrkR7",
+  "metadata": {
+    "name": "escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "cancel_escrow",
+      "docs": [
+        "# Cancel Escrow Instruction",
+        "",
+        "**What it does**: Maker cancels an unfunded escrow before expiry, getting their tokens back.",
+        "",
+        "## When This Can Be Used",
+        "",
+        "- Escrow is still active (not completed or previously cancelled)",
+        "- Taker has NOT yet funded the escrow (vault_b is empty)",
+        "- Maker wants to withdraw their offer and reclaim tokens",
+        "",
+        "## Step-by-Step Process",
+        "",
+        "1. **Validate conditions**: Ensure caller is maker and escrow is unfunded",
+        "2. **Return tokens**: Transfer Token A back to maker from vault",
+        "3. **Clean up vault**: Close vault account and reclaim rent",
+        "4. **Update state**: Mark escrow as inactive",
+        "5. **Emit event**: Log the cancellation for transparency",
+        "",
+        "## Security Features",
+        "",
+        "- **Maker only**: Only the original maker can cancel",
+        "- **Unfunded only**: Cannot cancel after taker has deposited",
+        "- **Active only**: Cannot cancel already completed escrows",
+        "",
+        "## Why This Function Exists",
+        "",
+        "Gives makers control over their offers. If no suitable taker appears,",
+        "the maker can withdraw their tokens instead of waiting forever.",
+        "This is different from `refund_after_expiry` which is for expired escrows."
+      ],
+      "discriminator": [
+        156,
+        203,
+        54,
+        179,
+        38,
+        72,
+        33,
+        21
+      ],
+      "accounts": [
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "complete_swap",
+      "docs": [
+        "# Complete Swap Instruction",
+        "",
+        "**What it does**: Executes the final token exchange when both parties have deposited their tokens.",
+        "",
+        "## Step-by-Step Process",
+        "",
+        "1. **Validate conditions**: Ensure escrow is funded and caller is the taker",
+        "2. **Atomic exchange**: Transfer SOL to taker AND SOL to maker simultaneously",
+        "3. **Update state**: Mark escrow as completed and inactive",
+        "4. **Emit event**: Log the completion for transparency",
+        "",
+        "## Security Features",
+        "",
+        "- **Atomic operation**: Either both transfers succeed or both fail (no partial completion)",
+        "- **PDA control**: Only the smart contract can access escrow SOL",
+        "- **Authorization**: Only the taker can complete the swap",
+        "- **State validation**: Escrow must be both active and funded",
+        "",
+        "## What Happens to the SOL",
+        "",
+        "- **Maker gets**: SOL (what they wanted) transferred to their account",
+        "- **Taker gets**: SOL (what they offered) transferred to their account",
+        "",
+        "## Why This is the \"Happy Path\"",
+        "",
+        "This function represents successful completion of the escrow agreement.",
+        "Both parties walk away satisfied with their SOL exchanged."
+      ],
+      "discriminator": [
+        23,
+        139,
+        223,
+        154,
+        218,
+        76,
+        29,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "taker",
+          "docs": [
+            "Taker finalizes the swap (must equal escrow.taker)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "maker",
+          "docs": [
+            "Maker (not signer here)"
+          ],
+          "writable": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_escrow",
+      "docs": [
+        "# Create Escrow Instruction",
+        "",
+        "**What it does**: Party A (the maker) creates a new escrow offer and deposits their tokens.",
+        "",
+        "## Step-by-Step Process",
+        "",
+        "1. **Validate inputs**: Ensure amounts > 0 and expiry is in future",
+        "2. **Create escrow account**: Store all trade details on blockchain",
+        "3. **Lock maker's tokens**: Transfer Token A to secure vault controlled by program",
+        "4. **Emit event**: Log the creation for transparency and tracking",
+        "",
+        "## Security Checks",
+        "",
+        "- Only positive amounts allowed (prevents zero-value escrows)",
+        "- Expiry must be future-dated (prevents instant expiration)",
+        "- Maker must have sufficient tokens (enforced by token program)",
+        "- All accounts properly validated (enforced by Anchor)",
+        "",
+        "## What Happens Next",
+        "",
+        "- Escrow is now visible to potential takers",
+        "- Maker's SOL is safely locked in escrow PDA",
+        "- Anyone can call `fund_escrow` to complete the trade",
+        "- If no one takes it before expiry, maker can refund",
+        "",
+        "The escrow PDA holds the SOL securely."
+      ],
+      "discriminator": [
+        253,
+        215,
+        165,
+        116,
+        36,
+        108,
+        68,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "escrow",
+          "docs": [
+            "Escrow PDA: seeds = [\"escrow\", maker, escrow_id]"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "escrow_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker",
+          "docs": [
+            "Maker creating the escrow"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "escrow_id",
+          "type": "u64"
+        },
+        {
+          "name": "amount_a",
+          "type": "u64"
+        },
+        {
+          "name": "amount_b_expected",
+          "type": "u64"
+        },
+        {
+          "name": "expiry_ts",
+          "type": "i64"
+        },
+        {
+          "name": "taker_pubkey",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "fund_escrow",
+      "docs": [
+        "# Fund Escrow Instruction",
+        "",
+        "**What it does**: Party B (the taker) accepts the escrow offer and deposits their tokens.",
+        "",
+        "## Step-by-Step Process",
+        "",
+        "1. **Validate escrow state**: Ensure escrow is active and not already funded",
+        "2. **Lock taker's SOL**: Transfer SOL to escrow PDA controlled by program",
+        "3. **Update escrow state**: Mark as funded and record who the taker is",
+        "4. **Emit event**: Log the funding for transparency and tracking",
+        "",
+        "## Security Checks",
+        "",
+        "- Escrow must be active (not completed/cancelled/expired)",
+        "- Escrow must not be already funded (prevents double-funding)",
+        "- Taker must have sufficient SOL (enforced by system program)",
+        "",
+        "## What Happens Next",
+        "",
+        "- Both parties have now deposited their SOL",
+        "- Either party can now call `complete_swap` to execute the trade",
+        "- If no one completes it, either party can cancel (but both get their SOL back)",
+        "- The escrow is now \"armed\" and ready for completion",
+        "",
+        "## Why This Step Matters",
+        "",
+        "This is the critical \"acceptance\" step where the taker commits to the trade.",
+        "Once funded, the escrow becomes a binding agreement between both parties."
+      ],
+      "discriminator": [
+        155,
+        18,
+        218,
+        141,
+        182,
+        213,
+        69,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "escrow",
+          "docs": [
+            "Escrow must exist (PDA)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "taker",
+          "docs": [
+            "Taker funds the escrow"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "maker",
+          "docs": [
+            "Maker (for has_one check)"
+          ],
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "refund_after_expiry",
+      "docs": [
+        "# Refund After Expiry Instruction",
+        "",
+        "**What it does**: Maker recovers their tokens from an expired, unfunded escrow.",
+        "",
+        "## When This Can Be Used",
+        "",
+        "- Escrow has reached its expiry timestamp",
+        "- Taker never funded the escrow (vault_b is empty)",
+        "- Escrow is still active (not manually cancelled)",
+        "- Maker wants to reclaim their locked tokens",
+        "",
+        "## Step-by-Step Process",
+        "",
+        "1. **Check expiry**: Verify current time is past expiry timestamp",
+        "2. **Validate conditions**: Ensure escrow is unfunded and caller is maker",
+        "3. **Return tokens**: Transfer Token A back to maker from vault",
+        "4. **Clean up vault**: Close vault account and reclaim rent",
+        "5. **Update state**: Mark escrow as inactive",
+        "6. **Emit event**: Log the refund for transparency",
+        "",
+        "## Security Features",
+        "",
+        "- **Time-locked**: Cannot refund until expiry time has passed",
+        "- **Maker only**: Only the original maker can claim the refund",
+        "- **Unfunded only**: Cannot refund if taker has deposited tokens",
+        "",
+        "## Why This Protection Exists",
+        "",
+        "Prevents funds from being permanently locked if no taker appears.",
+        "The expiry mechanism ensures makers can always recover their tokens",
+        "if the trade doesn't complete within the agreed timeframe.",
+        "",
+        "## Difference from Cancel",
+        "",
+        "Unlike `cancel_escrow`, this can only be called after expiry.",
+        "It provides automatic protection against stuck funds."
+      ],
+      "discriminator": [
+        210,
+        2,
+        52,
+        232,
+        49,
+        218,
+        178,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "escrow",
+          "writable": true
+        },
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowAccount",
+      "discriminator": [
+        36,
+        69,
+        48,
+        18,
+        128,
+        225,
+        125,
+        135
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EscrowCancelled",
+      "discriminator": [
+        98,
+        241,
+        195,
+        122,
+        213,
+        0,
+        162,
+        161
+      ]
+    },
+    {
+      "name": "EscrowCompleted",
+      "discriminator": [
+        229,
+        26,
+        0,
+        202,
+        140,
+        167,
+        106,
+        187
+      ]
+    },
+    {
+      "name": "EscrowCreated",
+      "discriminator": [
+        70,
+        127,
+        105,
+        102,
+        92,
+        97,
+        7,
+        173
+      ]
+    },
+    {
+      "name": "EscrowFunded",
+      "discriminator": [
+        228,
+        243,
+        166,
+        74,
+        22,
+        167,
+        157,
+        244
+      ]
+    },
+    {
+      "name": "EscrowRefunded",
+      "discriminator": [
+        132,
+        209,
+        49,
+        109,
+        135,
+        138,
+        28,
+        81
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "Invalid zero amount"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidExpiry",
+      "msg": "Invalid expiry timestamp"
+    },
+    {
+      "code": 6002,
+      "name": "NotActive",
+      "msg": "Escrow is not active"
+    },
+    {
+      "code": 6003,
+      "name": "AlreadyFunded",
+      "msg": "Escrow is already funded"
+    },
+    {
+      "code": 6004,
+      "name": "NotFunded",
+      "msg": "Escrow is not funded yet"
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "Only taker can call this"
+    },
+    {
+      "code": 6006,
+      "name": "TakerNotSet",
+      "msg": "Taker not set"
+    },
+    {
+      "code": 6007,
+      "name": "NotExpired",
+      "msg": "Escrow has not expired yet"
+    },
+    {
+      "code": 6008,
+      "name": "EscrowExpired",
+      "msg": "Escrow has expired and cannot be funded"
+    }
+  ],
+  "types": [
+    {
+      "name": "EscrowAccount",
+      "docs": [
+        "# Escrow Account Structure",
+        "",
+        "This is the **main data structure** that stores all information about an escrow transaction.",
+        "Think of it as a digital \"contract\" that both parties agree to follow.",
+        "",
+        "## What It Stores",
+        "",
+        "- **Unique ID**: Each escrow has a unique identifier (like a transaction number)",
+        "- **SOL Details**: How much SOL is being exchanged",
+        "- **Party Information**: Who created the escrow and who can take it",
+        "- **Time Controls**: When the escrow expires and when it was created",
+        "- **Current State**: Whether it's waiting for funding, ready to complete, or expired",
+        "",
+        "## Security Importance",
+        "",
+        "This account is **immutable once created** (except for status updates).",
+        "All critical information is stored here and cannot be changed after creation."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maker",
+            "docs": [
+              "The person who created this escrow (Party A)",
+              "This person deposits SOL and sets the terms"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "taker",
+            "docs": [
+              "The person who can take this escrow offer (Party B)",
+              "If None, anyone can take it. If Some(key), only that specific person can"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "escrow_id",
+            "docs": [
+              "Unique identifier for this escrow (like a transaction ID)",
+              "Generated from maker's public key + timestamp for uniqueness"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_a",
+            "docs": [
+              "How much SOL the maker is offering",
+              "This amount is locked in the escrow until the swap completes"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_b_expected",
+            "docs": [
+              "How much SOL the taker must provide",
+              "The taker must deposit exactly this amount to complete the swap"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_funded",
+            "docs": [
+              "Whether the taker has deposited their SOL",
+              "True when taker has funded, false when waiting for taker"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether this escrow is still active and can be used",
+              "Set to false when completed, cancelled, or refunded"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_completed",
+            "docs": [
+              "Whether this escrow was successfully completed",
+              "Set to true only when the swap is completed successfully"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "expiry_ts",
+            "docs": [
+              "When this escrow expires (Unix timestamp)",
+              "After this time, only the maker can refund their SOL",
+              "This protects both parties from funds being stuck forever"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for the PDA derivation",
+              "Used to recreate the escrow account address when needed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowCompleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "taker",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "escrow_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount_a",
+            "type": "u64"
+          },
+          {
+            "name": "amount_b_expected",
+            "type": "u64"
+          },
+          {
+            "name": "expiry_ts",
+            "type": "i64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "taker",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_b",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
