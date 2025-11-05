@@ -16,7 +16,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useWallet, useConnection, useAnchorWallet } from '@solana/wallet-adapter-react'
 import { Program, AnchorProvider } from '@coral-xyz/anchor'
-import escrowIdl from '../../target/idl/escrow.json'
+import escrowIdl from '../idl/escrow.json'
 
 /**
  * EscrowContextType Interface
