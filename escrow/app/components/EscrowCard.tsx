@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PublicKey, SystemProgram } from '@solana/web3.js'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useEscrow } from './EscrowContext'
@@ -15,6 +15,22 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [localError, setLocalError] = useState<string>('')
   const [localSuccess, setLocalSuccess] = useState<string>('')
+
+  /**
+   * Auto-clear Local Success Messages Effect
+   *
+   * Automatically clears local success messages after 5 seconds
+   * to provide better user experience without persistent UI clutter.
+   */
+  useEffect(() => {
+    if (localSuccess) {
+      const timer = setTimeout(() => {
+        setLocalSuccess('')
+      }, 5000) // Clear after 5 seconds
+
+      return () => clearTimeout(timer)
+    }
+  }, [localSuccess])
 
   const now = Date.now() / 1000
   const isExpired = now >= escrow.expiryTs
@@ -47,8 +63,8 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
       return 'This escrow must be funded first before it can be completed. The taker needs to fund the escrow.'
     } else if (errorMsg.includes('custom program error')) {
       return `${action} failed due to program constraints.`
-    } else if (errorMsg.includes('blockhash not found')) {
-      return 'Network error. Please refresh and try again.'
+    } else if (errorMsg.includes('blockhash not found') || errorMsg.includes('failed to get recent blockhash') || errorMsg.includes('networkerror')) {
+      return 'Network error: Unable to reach the Solana RPC endpoint. Check your internet connection or RPC configuration and try again.'
     } else if (errorMsg.includes('simulation failed')) {
       return `${action} simulation failed. Please check your connection and try again.`
     } else if (errorMsg.includes('timeout')) {
@@ -121,16 +137,15 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
       setLocalSuccess(`Escrow funded successfully!`)
       console.log('Transaction signature:', tx)
 
-      // Refresh balance after funding
-      refreshBalance()
+      // Clear loading immediately after transaction confirmation
+      setLoading(false)
 
-      // Refresh escrows to show updated status
-      await fetchMakerEscrows()
-      onUpdate?.()
+      // Refresh balance and data in background without blocking UI
+      refreshBalance()
+      fetchMakerEscrows(false).then(() => onUpdate?.()).catch(console.error)
     } catch (error: any) {
       console.error('Fund escrow error:', error)
       setLocalError(parseError(error, 'Funding escrow'))
-    } finally {
       setLoading(false)
     }
   }
@@ -167,16 +182,15 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
       setLocalSuccess(`Swap completed successfully!`)
       console.log('Transaction signature:', tx)
 
-      // Refresh balance after completing swap
-      refreshBalance()
+      // Clear loading immediately after transaction confirmation
+      setLoading(false)
 
-      // Refresh escrows
-      await fetchMakerEscrows()
-      onUpdate?.()
+      // Refresh balance and data in background without blocking UI
+      refreshBalance()
+      fetchMakerEscrows(false).then(() => onUpdate?.()).catch(console.error)
     } catch (error: any) {
       console.error('Complete swap error:', error)
       setLocalError(parseError(error, 'Completing swap'))
-    } finally {
       setLoading(false)
     }
   }
@@ -212,16 +226,15 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
       setLocalSuccess(`Escrow cancelled successfully!`)
       console.log('Transaction signature:', tx)
 
-      // Refresh balance after cancelling
-      refreshBalance()
+      // Clear loading immediately after transaction confirmation
+      setLoading(false)
 
-      // Refresh escrows
-      await fetchMakerEscrows()
-      onUpdate?.()
+      // Refresh balance and data in background without blocking UI
+      refreshBalance()
+      fetchMakerEscrows(false).then(() => onUpdate?.()).catch(console.error)
     } catch (error: any) {
       console.error('Cancel escrow error:', error)
       setLocalError(parseError(error, 'Cancelling escrow'))
-    } finally {
       setLoading(false)
     }
   }
@@ -257,16 +270,15 @@ export default function EscrowCard({ escrow, onUpdate }: EscrowCardProps) {
       setLocalSuccess(`Refund processed successfully!`)
       console.log('Transaction signature:', tx)
 
-      // Refresh balance after refund
-      refreshBalance()
+      // Clear loading immediately after transaction confirmation
+      setLoading(false)
 
-      // Refresh escrows
-      await fetchMakerEscrows()
-      onUpdate?.()
+      // Refresh balance and data in background without blocking UI
+      refreshBalance()
+      fetchMakerEscrows(false).then(() => onUpdate?.()).catch(console.error)
     } catch (error: any) {
       console.error('Refund error:', error)
       setLocalError(parseError(error, 'Processing refund'))
-    } finally {
       setLoading(false)
     }
   }

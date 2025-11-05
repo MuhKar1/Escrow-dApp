@@ -27,15 +27,13 @@ import escrowIdl from '../idl/escrow.json'
 interface EscrowContextType {
   program: any                    // Anchor program instance for smart contract interactions
   escrows: any[]                  // User's created escrows
-  allEscrows: any[]               // All escrows in the system
   loading: boolean                // Global loading state for transactions
   message: string                 // Global message for user feedback
   balanceRefreshTrigger: number   // Counter to trigger balance updates
   setLoading: (loading: boolean) => void
   setMessage: (message: string) => void
   setEscrows: (escrows: any[]) => void
-  fetchMakerEscrows: () => Promise<void>    // Fetch escrows created by current user
-  fetchAllEscrows: () => Promise<void>      // Fetch all escrows in system
+  fetchMakerEscrows: (showMessages?: boolean) => Promise<void>    // Fetch escrows created by current user
   refreshBalance: () => void                // Trigger balance refresh across components
 }
 
@@ -61,10 +59,25 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
   // State variables for escrow data and UI state
   const [program, setProgram] = useState<any>(null)           // Smart contract program instance
   const [escrows, setEscrows] = useState<any[]>([])          // User's escrows
-  const [allEscrows, setAllEscrows] = useState<any[]>([])    // All system escrows
   const [loading, setLoading] = useState(false)              // Transaction loading state
   const [message, setMessage] = useState('')                 // User feedback messages
   const [balanceRefreshTrigger, setBalanceRefreshTrigger] = useState(0)  // Balance update trigger
+
+  /**
+   * Auto-clear Success Messages Effect
+   *
+   * Automatically clears success messages after 5 seconds to provide
+   * better user experience without persistent UI clutter.
+   */
+  useEffect(() => {
+    if (message && (message.includes('successfully') || message.includes('Found') || message.includes('funded') || message.includes('completed'))) {
+      const timer = setTimeout(() => {
+        setMessage('')
+      }, 5000) // Clear after 5 seconds
+
+      return () => clearTimeout(timer)
+    }
+  }, [message])
 
   /**
    * Program Initialization Effect
@@ -98,13 +111,15 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
    * Fetches all escrows created by the current user (maker).
    * This is used to display the user's own escrow offers.
    *
+   * @param showMessages - Whether to display user feedback messages (default: true)
+   *
    * Process:
    * 1. Query all program accounts of type EscrowAccount
    * 2. Filter accounts where maker equals current user
    * 3. Sort by escrow ID (newest first)
    * 4. Update local state with filtered results
    */
-  const fetchMakerEscrows = useCallback(async () => {
+  const fetchMakerEscrows = useCallback(async (showMessages: boolean = true) => {
     if (!program || !publicKey) return
 
     setLoading(true)
@@ -172,122 +187,19 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
 
       console.log(`Escrows for maker ${publicKey.toBase58()}: ${formattedEscrows.length}`)
       setEscrows(formattedEscrows)
-      setMessage(formattedEscrows.length > 0 ? `Found ${formattedEscrows.length} escrow(s)` : 'No escrows found')
+      if (showMessages) {
+        setMessage(formattedEscrows.length > 0 ? `Found ${formattedEscrows.length} escrow(s)` : 'No escrows found')
+      }
     } catch (error: any) {
       console.error('Error fetching escrows:', error)
-      setMessage('Error loading escrows: ' + (error.message ? (typeof error.message === 'string' ? error.message : String(error.message)) : 'Unknown error'))
+      if (showMessages) {
+        setMessage('Error loading escrows: ' + (error.message ? (typeof error.message === 'string' ? error.message : String(error.message)) : 'Unknown error'))
+      }
       setEscrows([])
     } finally {
       setLoading(false)
     }
   }, [program, publicKey])
-
-  /**
-   * fetchAllEscrows Function
-   *
-   * Fetches all escrows in the entire system (not just user's).
-   * This is used to show all available escrow offers for funding.
-   *
-   * Process:
-   * 1. Query all program accounts owned by the escrow program
-   * 2. Decode account data using Anchor's account decoder
-   * 3. Handle backward compatibility for different field names
-   * 4. Filter out incompatible accounts from old program versions
-   * 5. Sort by creation time (newest first)
-   * 6. Update global state with all valid escrows
-   */
-  const fetchAllEscrows = useCallback(async () => {
-    if (!program) return
-
-    setLoading(true)
-    try {
-      const connection = program.provider.connection
-
-      console.log('=== Fetching All Escrows ===')
-      console.log('Program ID:', program.programId.toBase58())
-
-      // Get all program accounts (raw data)
-      const accounts = await connection.getProgramAccounts(program.programId)
-
-      console.log(`Total escrow accounts found: ${accounts.length}`)
-
-      if (accounts.length === 0) {
-        console.log('⚠️ No escrow accounts found for this program!')
-        setAllEscrows([])
-        setMessage('No escrows found in the system')
-        return
-      }
-
-      // Debug: Log account structure
-      console.log('First account structure:', accounts[0])
-      console.log('Account data length:', accounts[0]?.account?.data?.length)
-      console.log('Sample account data lengths:', accounts.slice(0, 3).map((acc: any) => acc.account?.data?.length || 'undefined'))
-
-      // Try to decode each account, skip any that fail
-      const decodedAccounts: any[] = []
-      let incompatibleCount = 0
-
-      accounts.forEach(({ pubkey, account }: any, index: number) => {
-        console.log(`Attempting to decode account ${index + 1}/${accounts.length}: ${pubkey.toBase58()}`)
-        console.log(`Account data length: ${account.data.length}`)
-        const discriminator = Array.from(account.data.slice(0, 8))
-        console.log(`Account discriminator:`, discriminator)
-        console.log(`Expected discriminator: [36, 69, 48, 18, 128, 225, 125, 135]`)
-        console.log(`Discriminator matches:`, JSON.stringify(discriminator) === JSON.stringify([36, 69, 48, 18, 128, 225, 125, 135]))
-        
-        try {
-          const decoded = program.coder.accounts.decode('EscrowAccount', account.data)
-          console.log(`✓ Successfully decoded account ${pubkey.toBase58()}:`, decoded)
-          console.log(`Raw decoded object keys:`, Object.keys(decoded))
-          decodedAccounts.push({
-            ...decoded,
-            isCompleted: decoded.isCompleted ?? decoded.is_completed ?? false,
-            isFunded: decoded.isFunded ?? decoded.is_funded ?? false,
-            isActive: decoded.isActive ?? decoded.is_active ?? true,
-            escrowPda: pubkey,
-            escrowId: decoded.escrowId?.toNumber?.() ?? decoded.escrow_id?.toNumber?.() ?? 0,
-            amountA: decoded.amountA ?? decoded.amount_a ?? 0,
-            amountBExpected: decoded.amountBExpected ?? decoded.amount_b_expected ?? 0,
-            expiryTs: decoded.expiryTs ?? decoded.expiry_ts ?? 0,
-          })
-        } catch (err) {
-          incompatibleCount++
-          console.warn(`✗ Failed to decode escrow account ${index + 1}: ${pubkey.toString()}`, err)
-          console.warn(`Error details:`, err instanceof Error ? err.message : String(err))
-        }
-      })
-
-      console.log(`Successfully decoded: ${decodedAccounts.length} accounts`)
-      
-      if (incompatibleCount > 0) {
-        console.log(`⚠️ Skipped ${incompatibleCount} incompatible account(s) from old program versions`)
-      }
-
-      // Sort by creation time (newest first) - using escrowId as proxy for creation order
-      const sortedEscrows = decodedAccounts.sort((a: any, b: any) => b.escrowId - a.escrowId)
-
-      console.log(`All escrows in system: ${sortedEscrows.length}`)
-      setAllEscrows(sortedEscrows)
-    } catch (error: any) {
-      console.error('Error fetching all escrows:', error)
-      setMessage('Error loading escrows: ' + (error.message ? (typeof error.message === 'string' ? error.message : String(error.message)) : 'Unknown error'))
-      setAllEscrows([])
-    } finally {
-      setLoading(false)
-    }
-  }, [program])
-
-  /**
-   * Auto-fetch Effect
-   *
-   * Automatically fetches all escrows when the program is initialized.
-   * This ensures the UI is populated with data when the user connects their wallet.
-   */
-  useEffect(() => {
-    if (program) {
-      fetchAllEscrows()
-    }
-  }, [program, fetchAllEscrows])
 
   /**
    * refreshBalance Function
@@ -313,7 +225,6 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
   const value = {
     program,                    // Smart contract program instance
     escrows,                    // User's created escrows
-    allEscrows,                 // All escrows in the system
     loading,                    // Global loading state
     message,                    // Global message for user feedback
     balanceRefreshTrigger,      // Counter for triggering balance updates
@@ -321,7 +232,6 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
     setMessage,                 // Function to set global message
     setEscrows,                 // Function to update user's escrows
     fetchMakerEscrows,          // Function to fetch user's escrows
-    fetchAllEscrows,            // Function to fetch all system escrows
     refreshBalance,             // Function to trigger balance refresh
   }
 
@@ -344,7 +254,7 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
  * Custom hook for accessing escrow context.
  * Must be used within an EscrowProvider component.
  *
- * Usage: const { program, loading, fetchAllEscrows } = useEscrow()
+ * Usage: const { program, loading, fetchMakerEscrows } = useEscrow()
  */
 export function useEscrow() {
   const context = useContext(EscrowContext)

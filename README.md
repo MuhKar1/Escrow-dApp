@@ -204,7 +204,6 @@ The application uses React Context for global state management:
 interface EscrowContextType {
   program: any                    // Anchor program instance
   escrows: any[]                  // User's escrows
-  allEscrows: any[]               // All system escrows
   loading: boolean                // Transaction loading state
   message: string                 // User feedback messages
   balanceRefreshTrigger: number   // Balance update trigger
@@ -313,33 +312,21 @@ npm run build
 
 ### Frontend Deployment
 
-#### Deploy to Vercel (Recommended for Demo)
-
-1. **Install Vercel CLI**
-   ```bash
-   npm install -g vercel
-   ```
-
-2. **Deploy from App Directory**
+1. **Build Application**
    ```bash
    cd app
-   vercel --prod
+   npm run build
    ```
 
-3. **Configure Environment Variables**
-   Set the following environment variables in your Vercel dashboard:
-   - `NEXT_PUBLIC_SOLANA_NETWORK`: `devnet` (for demo) or `mainnet-beta` (for production)
+2. **Deploy to Vercel/Netlify**
+   ```bash
+   # For Vercel
+   npx vercel --prod
 
-4. **Access Your Demo**
-   Vercel will provide a live URL for your demo application.
-
-#### Alternative: Deploy to Netlify
-
-```bash
-cd app
-npm run build
-netlify deploy --prod --dir=out
-```
+   # For Netlify
+   npm run build
+   netlify deploy --prod --dir=out
+   ```
 
 ## Testing
 
@@ -394,7 +381,7 @@ npm run lint
 
 ```typescript
 // Initialize escrow context
-const { program, fetchAllEscrows } = useEscrow()
+const { program, fetchMakerEscrows } = useEscrow()
 
 // Create new escrow
 await program.methods
@@ -402,8 +389,8 @@ await program.methods
   .accounts({ ... })
   .rpc()
 
-// Fetch all escrows
-await fetchAllEscrows()
+// Fetch user's escrows
+await fetchMakerEscrows()
 ```
 
 ## API Reference

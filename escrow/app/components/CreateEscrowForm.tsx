@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PublicKey, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { BN } from '@coral-xyz/anchor'
 import { useWallet } from '@solana/wallet-adapter-react'
@@ -16,6 +16,22 @@ export default function CreateEscrowForm() {
   const [takerPubkey, setTakerPubkey] = useState('')
   const [localError, setLocalError] = useState<string>('')
   const [localSuccess, setLocalSuccess] = useState<string>('')
+
+  /**
+   * Auto-clear Local Success Messages Effect
+   *
+   * Automatically clears local success messages after 5 seconds
+   * to provide better user experience without persistent UI clutter.
+   */
+  useEffect(() => {
+    if (localSuccess) {
+      const timer = setTimeout(() => {
+        setLocalSuccess('')
+      }, 5000) // Clear after 5 seconds
+
+      return () => clearTimeout(timer)
+    }
+  }, [localSuccess])
 
   const createEscrow = async () => {
     if (!program || !publicKey) return
@@ -139,7 +155,7 @@ export default function CreateEscrowForm() {
       setMessage(`Escrow created successfully! TX: ${tx}`)
       setLocalSuccess(`Escrow created successfully!`)
       console.log('Transaction signature:', tx)
-      console.log('View on explorer: https://explorer.solana.com/tx/' + tx + '?cluster=' + (process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'mainnet' : 'devnet'))
+      console.log('View on explorer: https://explorer.solana.com/tx/' + tx + '?cluster=devnet')
 
       // Refresh balance after creating escrow
       refreshBalance()
@@ -152,14 +168,17 @@ export default function CreateEscrowForm() {
       setTakerPubkey('')
 
       // Refresh escrows
-      await fetchMakerEscrows()
+      await fetchMakerEscrows(false)
     } catch (error: any) {
       console.error('Create escrow error:', error)
 
-      // Parse error message for user-friendly display
+      // Parse error message for user-friendly display. Handle network errors explicitly.
       let userFriendlyMessage = 'Transaction failed'
 
-      if (error.message) {
+      // Detect network-level TypeError (e.g., "NetworkError when attempting to fetch resource")
+      if (error instanceof TypeError || (error.name && error.name === 'TypeError')) {
+        userFriendlyMessage = 'Network error: Unable to reach the Solana RPC endpoint. Check your internet connection or RPC configuration and try again.'
+      } else if (error.message) {
         const errorMsg = typeof error.message === 'string' ? error.message.toLowerCase() : String(error.message).toLowerCase()
 
         if (errorMsg.includes('already in use')) {
@@ -170,8 +189,8 @@ export default function CreateEscrowForm() {
           userFriendlyMessage = 'Invalid taker wallet address. Please check the address.'
         } else if (errorMsg.includes('custom program error')) {
           userFriendlyMessage = 'Transaction failed due to program constraints. Please try again.'
-        } else if (errorMsg.includes('blockhash not found')) {
-          userFriendlyMessage = 'Network error. Please refresh and try again.'
+        } else if (errorMsg.includes('blockhash not found') || errorMsg.includes('failed to get recent blockhash') || errorMsg.includes('networkerror')) {
+          userFriendlyMessage = 'Network error: Unable to reach the Solana RPC endpoint. Check your internet connection or RPC configuration and try again.'
         } else if (errorMsg.includes('simulation failed')) {
           userFriendlyMessage = 'Transaction simulation failed. Please check your inputs and try again.'
         } else {

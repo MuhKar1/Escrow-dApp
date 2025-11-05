@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { BN } from '@coral-xyz/anchor'
 import { useEscrow } from './EscrowContext'
@@ -11,6 +11,35 @@ export default function EscrowFinder() {
   const [foundEscrow, setFoundEscrow] = useState<any>(null)
   const [localError, setLocalError] = useState<string>('')
   const [localSuccess, setLocalSuccess] = useState<string>('')
+
+  /**
+   * Auto-clear Local Success Messages Effect
+   *
+   * Automatically clears local success messages after 5 seconds
+   * to provide better user experience without persistent UI clutter.
+   */
+  useEffect(() => {
+    if (localSuccess) {
+      const timer = setTimeout(() => {
+        setLocalSuccess('')
+      }, 5000) // Clear after 5 seconds
+
+      return () => clearTimeout(timer)
+    }
+  }, [localSuccess])
+
+  // Function to refresh the found escrow data after state changes (like funding)
+  const refreshFoundEscrow = async () => {
+    if (!foundEscrow || !program) return
+
+    try {
+      const escrowAccount = await program.account.escrowAccount.fetch(foundEscrow.escrowPda)
+      setFoundEscrow({ ...escrowAccount, escrowPda: foundEscrow.escrowPda, id: foundEscrow.id })
+    } catch (error) {
+      console.error('Error refreshing escrow data:', error)
+      // If refresh fails, keep the current data
+    }
+  }
 
   const findEscrow = async () => {
     if (!program || !findEscrowId || !findMakerPubkey) {
@@ -50,6 +79,31 @@ export default function EscrowFinder() {
       )
 
       const escrowAccount = await program.account.escrowAccount.fetch(escrowPda)
+
+      // Validate that the escrow is still active
+      const now = Date.now() / 1000
+      const isExpired = now >= escrowAccount.expiryTs
+      const isCompleted = escrowAccount.isCompleted ?? escrowAccount.is_completed ?? false
+      const isActive = escrowAccount.isActive ?? escrowAccount.is_active ?? true
+
+      if (isCompleted) {
+        setLocalError('This escrow has already been completed and is no longer active.')
+        setLoading(false)
+        return
+      }
+
+      if (isExpired) {
+        setLocalError('This escrow has expired and is no longer active.')
+        setLoading(false)
+        return
+      }
+
+      if (!isActive) {
+        setLocalError('This escrow is no longer active.')
+        setLoading(false)
+        return
+      }
+
       setFoundEscrow({ ...escrowAccount, escrowPda, id })
       setMessage('Escrow found successfully!')
       setLocalSuccess('Escrow found successfully!')
@@ -57,14 +111,12 @@ export default function EscrowFinder() {
       console.error('Find escrow error:', error)
       setFoundEscrow(null)
 
-      // Provide user-friendly error message for escrow not found
-      let userFriendlyMessage = 'Escrow not found or error fetching data'
+      // Provide user-friendly error message
+      let userFriendlyMessage = 'Error finding escrow'
 
       if (error.message) {
         const errorMsg = typeof error.message === 'string' ? error.message.toLowerCase() : String(error.message).toLowerCase()
-        if (errorMsg.includes('account does not exist') || errorMsg.includes('not found')) {
-          userFriendlyMessage = 'No escrow found with the provided ID and maker address.'
-        } else if (errorMsg.includes('invalid public key')) {
+        if (errorMsg.includes('invalid public key')) {
           userFriendlyMessage = 'Invalid maker wallet address format.'
         } else {
           userFriendlyMessage = `Error: ${typeof error.message === 'string' ? error.message : String(error.message)}`
@@ -132,7 +184,7 @@ export default function EscrowFinder() {
       {foundEscrow && (
         <div className="border border-gray-600 rounded-lg p-4 bg-gray-700">
           <h3 className="font-semibold text-white mb-3 text-lg">Found Escrow</h3>
-          <EscrowCard escrow={foundEscrow} />
+          <EscrowCard escrow={foundEscrow} onUpdate={refreshFoundEscrow} />
         </div>
       )}
     </div>
