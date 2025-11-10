@@ -101,6 +101,52 @@ function HomeContent() {
           <TimeDisplay />
         </div>
 
+        {/* Message Display - Shows transaction results and feedback */}
+        <MessageDisplay message={message} type={getMessageType()} onDismiss={() => setMessage('')} />
+
+        {/* Pre-Connection Information - Only shown before wallet connection */}
+        {!connected && mounted && (
+          <div className="bg-gradient-to-r from-blue-900 to-purple-900 rounded-lg shadow-md p-6 border border-blue-700">
+            <div className="text-center space-y-4">
+              <div className="flex items-center justify-center space-x-2 mb-4">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white">Welcome to Escrow-dApp</h3>
+              </div>
+
+              <p className="text-gray-300 text-lg leading-relaxed">
+                A secure, non-custodial escrow platform for trustless peer-to-peer SOL token exchanges on Solana blockchain.
+              </p>
+
+              <div className="grid md:grid-cols-2 gap-4 mt-6">
+                <div className="bg-gray-800 bg-opacity-50 rounded-lg p-4">
+                  <h4 className="text-white font-semibold mb-2">🔐 Your Security First</h4>
+                  <p className="text-gray-300 text-sm">
+                    Non-custodial design — private keys never leave the connected wallet. Transactions are signed locally and submitted to the Solana network. Smart contract logic enforces atomic swaps and refund rules.
+                  </p>
+                </div>
+
+                <div className="bg-gray-800 bg-opacity-50 rounded-lg p-4">
+                  <h4 className="text-white font-semibold mb-2">🌐 Open to Everyone</h4>
+                  <p className="text-gray-300 text-sm">
+                    Anyone can create escrow agreements. Multiple users can participate simultaneously in secure SOL exchanges.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-900 bg-opacity-50 border border-yellow-600 rounded-lg p-4 mt-4">
+                <p className="text-yellow-300 text-sm">
+                  <strong>⚠️ Devnet Environment:</strong> This application is currently deployed on Solana devnet for testing purposes.
+                  Use test SOL tokens only.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Wallet Connection Section */}
         <div className="bg-gray-800 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-white mb-4">Wallet Connection</h2>
@@ -120,7 +166,7 @@ function HomeContent() {
                 <div className="w-3 h-3 bg-red-400 rounded-full"></div>
                 <p className="text-red-400 font-medium">Wallet Not Connected</p>
               </div>
-              <p className="text-gray-300">Connect your wallet to start using the escrow service</p>
+              <p className="text-gray-300">Connect a wallet to create, find, fund, and complete escrows. The connected wallet must authorize transactions; private keys remain in the wallet and are never shared.</p>
               {/* Wallet connection button from Solana wallet adapter */}
               <WalletMultiButton className="!bg-purple-600 hover:!bg-purple-700 !text-white !font-medium !px-6 !py-2 !rounded-lg !transition-colors" />
             </div>
@@ -145,9 +191,6 @@ function HomeContent() {
             </div>
           )}
         </div>
-
-        {/* Message Display - Shows transaction results and feedback */}
-        <MessageDisplay message={message} type={getMessageType()} onDismiss={() => setMessage('')} />
 
         {/* Create Escrow Form - Only shown when wallet is connected */}
         {connected && <CreateEscrowForm />}
